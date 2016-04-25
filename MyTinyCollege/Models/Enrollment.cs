@@ -1,4 +1,6 @@
-﻿namespace MyTinyCollege.Models
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace MyTinyCollege.Models
 {
     //Grade enum
     public enum Grade
@@ -16,6 +18,7 @@
 
         public int StudentID { get; set; } //FK to student
 
+        [DisplayFormat(NullDisplayText ="No grade")]
         public Grade? Grade { get; set; } //? in this case means optional (nullable)
 
         public virtual Student student { get; set; }  // Many enrollments to 1 student
