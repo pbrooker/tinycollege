@@ -41,7 +41,44 @@
         <dd>
             @Html.DisplayFor(model => model.EnrollmentDate)
         </dd>
-
+        @* pbrooker: added student enrollment *@
+        <dt>
+            @Html.DisplayNameFor(model=>model.Enrollments)
+        </dt>
+        <dd>
+            <table class="table">
+                <tr>
+                    <th>Course Title</th>
+                    <th>Grade</th>
+                    <th>&nbsp;</th>
+                </tr>
+                @foreach(var item in Model.Enrollments)
+                {
+                    <tr>
+                        <td>@Html.DisplayFor(modelItem=>item.course.Title)</td>
+                        <td>@Html.DisplayFor(modelItem=>item.Grade)</td>
+                        <td>
+                            @* Add or Edit Grade Links *@
+                            @if (String.IsNullOrEmpty(item.Grade.ToString()))
+                            {
+                                //No Grade - Creadte Add Grade Link
+                                //@:AddGrade
+                                <a href="@Url.Action("Edit", "Enrollment", new { id = item.EnrollmentID })" title="Add Grade">Add Grade</a>
+                                <span class="glyphicon glyphicon-edit"> </span>
+                            }
+                            else
+                            {
+                                //Grade - Create Edit Grade Link
+                                //@:EditGrade
+                                <a href="@Url.Action("Edit", "Enrollment", new { id = item.EnrollmentID })" title="Edit Grade">Edit Grade</a>
+                                <span class="glyphicon glyphicon-pencil"> </span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </table>
+        </dd>
+        @* pbrooker: end student enrollment *@
     </dl>
 </div>
 <p>

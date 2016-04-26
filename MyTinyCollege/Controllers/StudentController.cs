@@ -16,9 +16,44 @@ namespace MyTinyCollege.Controllers
         private SchoolContext db = new SchoolContext();
 
         // GET: Student
-        public ActionResult Index()
+        //public ActionResult Index()
+        //{
+        //    return View(db.Students.ToList());
+        //}
+
+        //pbrooker: adding sorting functionality
+        public ActionResult Index(string sortOrder)
         {
-            return View(db.Students.ToList());
+            //prepare the sort
+            ViewBag.CurrentSort = sortOrder; //get current sort from UI
+            ViewBag.FNameSortParm = string.IsNullOrEmpty(sortOrder) ? "fname_desc" : "";
+            ViewBag.LNameSortParm = string.IsNullOrEmpty(sortOrder) ? "lname_desc" : "";
+            //ViewBag.DateSortParm = sortOrder
+
+            //Get our student data
+            var students = from s in db.Students select s;
+
+            //Apply sort order
+            switch(sortOrder)
+            {
+                //last name desc
+                case "lname_desc":
+                    students = students.OrderByDescending(s => s.LastName);
+                    break;
+
+                //first name desc
+                case "fname_desc":
+                    students = students.OrderByDescending(s => s.FirstName);
+                    break;
+
+                //last name asc
+                default:
+                    students = students.OrderBy(s => s.LastName);
+                    break;
+            }
+            //return the students object as an enumerable list
+            return View(students.ToList());
+
         }
 
         // GET: Student/Details/5
@@ -47,15 +82,22 @@ namespace MyTinyCollege.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Create([Bind(Include = "ID,LastName,FirstName,Email,EnrollmentDate")] Student student)
+        public ActionResult Create([Bind(Include = "LastName,FirstName,Email,EnrollmentDate")] Student student)
         {
-            if (ModelState.IsValid)
+            try
             {
-                db.People.Add(student);
-                db.SaveChanges();
-                return RedirectToAction("Index");
+                if (ModelState.IsValid)
+                {
+                    db.People.Add(student);
+                    db.SaveChanges();
+                    return RedirectToAction("Index");
+                }
             }
-
+            catch(Exception /*ex*/)
+            {
+                //We could log the error - uncomment the ex
+                ModelState.AddModelError("", "Unable to save changes. Try again later!");
+            }
             return View(student);
         }
 
@@ -77,26 +119,60 @@ namespace MyTinyCollege.Controllers
         // POST: Student/Edit/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
+        [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public ActionResult Edit([Bind(Include = "ID,LastName,FirstName,Email,EnrollmentDate")] Student student)
+        public ActionResult EditPost(int? id)
         {
-            if (ModelState.IsValid)
+            if(id==null)
             {
-                db.Entry(student).State = EntityState.Modified;
-                db.SaveChanges();
-                return RedirectToAction("Index");
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            return View(student);
+
+            var studenttoUpdate = db.Students.Find(id);
+
+            if(TryUpdateModel(studenttoUpdate, "", 
+                new string[] { "LastName", "FirstName", "EnrollmentDate", "Email"}))
+            {
+                try
+                {
+                    db.SaveChanges();
+                    return RedirectToAction("Index");
+                }
+                catch (Exception)
+                {
+
+                    ModelState.AddModelError("", "Unable to save changes. Try again later!");
+                }
+
+            }
+
+            //irregardless of the outcome(success or fail) we return the student model with edit view or index view
+            return View(studenttoUpdate);
         }
+        //public ActionResult Edit([Bind(Include = "ID,LastName,FirstName,Email,EnrollmentDate")] Student student)
+        //{
+        //    if (ModelState.IsValid)
+        //    {
+        //        db.Entry(student).State = EntityState.Modified;
+        //        db.SaveChanges();
+        //        return RedirectToAction("Index");
+        //    }
+        //    return View(student);
+        //}
 
         // GET: Student/Delete/5
-        public ActionResult Delete(int? id)
+        public ActionResult Delete(int? id, bool? saveChangesError = false)
         {
             if (id == null)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
+            //check for error
+            if (saveChangesError.GetValueOrDefault())
+            {
+                ViewBag.ErrorMessage = "Delete failed, please try again.";
+            }
+
             Student student = db.Students.Find(id);
             if (student == null)
             {
@@ -106,18 +182,28 @@ namespace MyTinyCollege.Controllers
         }
 
         // POST: Student/Delete/5
-        [HttpPost, ActionName("Delete")]
+        [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult DeleteConfirmed(int id)
+        public ActionResult Delete(int id)
         {
-            Student student = db.Students.Find(id);
-            db.People.Remove(student);
-            db.SaveChanges();
-            return RedirectToAction("Index");
+            try
+            {
+                Student student = db.Students.Find(id);
+                db.People.Remove(student);
+                db.SaveChanges();                
+            }
+            catch (Exception)
+            {
+                //redirect user back to get Delete with same item (id) including a boolean 
+                //flag parameter stating that an error has occured
+                return RedirectToAction("Delete", new { id = id, saveChangesError = true });
+            }
+           return RedirectToAction("Index");
         }
 
         protected override void Dispose(bool disposing)
         {
+
             if (disposing)
             {
                 db.Dispose();
