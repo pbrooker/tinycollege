@@ -8,6 +8,7 @@ using System.Web;
 using System.Web.Mvc;
 using MyTinyCollege.DAL;
 using MyTinyCollege.Models;
+using PagedList;
 
 namespace MyTinyCollege.Controllers
 {
@@ -21,8 +22,8 @@ namespace MyTinyCollege.Controllers
         //    return View(db.Students.ToList());
         //}
 
-        //pbrooker: adding sorting functionality
-        public ActionResult Index(string sortOrder)
+        //pbrooker: adding sorting, filtering and paging functionality
+        public ActionResult Index(string sortOrder, string searchString, string currentFilter, int? page)
         {
             //prepare the sort
             ViewBag.CurrentSort = sortOrder; //get current sort from UI
@@ -32,8 +33,30 @@ namespace MyTinyCollege.Controllers
             ViewBag.EmailSortParm = sortOrder == "email" ? "email_desc" : "email";
             //ViewBag.DateSortParm = sortOrder
 
+            //for filtering and paging
+            if(searchString != null)
+            {
+                page = 1;
+            }
+            else
+            {
+                searchString = currentFilter;
+            }
+
+
+            ViewBag.CurrentFilter = searchString;
+                
+
             //Get our student data
             var students = from s in db.Students select s;
+
+            //check for filter (searchString)
+            if(!string.IsNullOrEmpty(searchString))
+            {
+                //Apply filter on first and last name
+                students = students.Where(s => s.LastName.Contains(searchString)|| 
+                s.FirstName.Contains(searchString));
+            }
 
             //Apply sort order
             switch(sortOrder)
@@ -78,7 +101,17 @@ namespace MyTinyCollege.Controllers
                     break;
             }
             //return the students object as an enumerable list
-            return View(students.ToList());
+            //return View(students.ToList());
+
+            //Setup Pager
+            int pageSize = 3; //start with page size fo 3 for paging
+            int pageNumber = (page ?? 1);
+            /*THe two question marks represent the null-coalexcing operator.
+             * The null coalescing operation defines a default value for a nullable type;
+             * the expression (page ?? 1) means return the value of page if it has a value,
+             * or return 1 if page is null 
+             */
+            return View(students.ToPagedList(pageNumber, pageSize));
 
         }
 
@@ -227,6 +260,24 @@ namespace MyTinyCollege.Controllers
            return RedirectToAction("Index");
         }
 
+
+        //mwilliams:  Stats
+        public ActionResult Stats()
+        {
+            IQueryable<ViewModels.EnrollmentDateGroup> data =
+                from student in db.Students
+                group student by student.EnrollmentDate into dateGroup
+                select new ViewModels.EnrollmentDateGroup()
+                {
+                    EnrollmentDate = dateGroup.Key,
+                    StudentCount = dateGroup.Count()
+                };
+            //The LINQ statement above groups the student entities by enrollment date, 
+            //calculating the number of entities in each group, and storing the results
+            //in a collection of EnrollmentDateGroup view model objects
+
+            return View(data.ToList());
+        }
         protected override void Dispose(bool disposing)
         {
 
