@@ -40,11 +40,16 @@ namespace MyTinyCollege.Controllers
                 //Lazy loading
                 viewModel.Courses = viewModel.Instructors
                                     .Where(i => i.ID == id.Value).Single().Courses;
+
+                var InstructorName = viewModel.Instructors.Where(i => i.ID == id.Value).Single();
+                ViewBag.InstructorName = InstructorName.FullName;
             }
 
             //check for courseID (a course has been selected -> get enrolled students)
             if(courseID!=null)
             {
+
+                ViewBag.courseID = courseID.Value; //for UI: which course row is selected
                 ////Lazy Loading
                 //viewModel.Enrollments = viewModel.Courses
                 //                        .Where(x => x.CourseID == courseID.Value)
@@ -60,6 +65,9 @@ namespace MyTinyCollege.Controllers
                     db.Entry(enrollment).Reference(x => x.student).Load();
                 }
                 viewModel.Enrollments = selectedCourse.Enrollments;
+
+                //to send selected course title to UI
+                ViewBag.CourseTitle = selectedCourse.Title;
             }
             //return the view attaching the viewModel (instructors, course, enrollments)
             return View(viewModel);
@@ -112,13 +120,51 @@ namespace MyTinyCollege.Controllers
             {
                 return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            Instructor instructor = db.Instructors.Find(id);
+            //Instructor instructor = db.Instructors.Find(id);
+            //pbrooker: replaced scaffoleded code to include office assingments and courses
+            //using eager loading
+            Instructor instructor = db.Instructors
+                                    .Include(i => i.OfficeAssignment)
+                                    .Include(i => i.Courses)
+                                    .Where(i => i.ID == id).Single();
+
+            //for retrieving all courses and which ones are assigned to the 
+            //currently selected instructor
+            PopulateAssignedCourseData(instructor);
+
             if (instructor == null)
             {
                 return HttpNotFound();
             }
             ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location", instructor.ID);
             return View(instructor);
+        }
+
+        private void PopulateAssignedCourseData(Instructor instructor)
+        {
+            var allCourses = db.Courses; //need all courses to be displayed in view
+            //populate a hash set of integers representing the courseID for each course that this instructor is teaching
+            var instructorCourses = new HashSet<int>(instructor.Courses.Select(c => c.CourseID));
+
+            var viewModel = new List<AssignedCourseData>();
+
+            //Loop all courses and see if there is a match between all courses and instructor courses
+            //if so, set assigned boolean accordingly
+            foreach(var course in allCourses)
+            {
+                //Instantiate and Populate the AssignedCourseData object
+                //and add this object to the viewModel
+                viewModel.Add(new AssignedCourseData
+                {
+                    CourseId = course.CourseID,
+                    Title = course.Title,
+                    //set the assigned book if it contains the instructor course id
+                    Assigned = instructorCourses.Contains(course.CourseID)
+                });
+            }
+
+            //populate ViewBag object with viewModel
+            ViewBag.Courses = viewModel;
         }
 
         // POST: Instructor/Edit/5
