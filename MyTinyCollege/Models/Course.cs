@@ -30,7 +30,7 @@ namespace MyTinyCollege.Models
         //=================== Navigation properties ===================================
 
             //one course to many enrollments
-        public virtual ICollection<Enrollment> Enrollment { get; set; }
+        public virtual ICollection<Enrollment> Enrollments { get; set; }
 
         //1 course to many instructors
         public virtual ICollection<Instructor>  Instructors { get; set; }

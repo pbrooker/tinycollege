@@ -8,6 +8,7 @@ using System.Web;
 using System.Web.Mvc;
 using MyTinyCollege.DAL;
 using MyTinyCollege.Models;
+using MyTinyCollege.ViewModels;
 
 namespace MyTinyCollege.Controllers
 {
@@ -16,10 +17,52 @@ namespace MyTinyCollege.Controllers
         private SchoolContext db = new SchoolContext();
 
         // GET: Instructor
-        public ActionResult Index()
+        public ActionResult Index(int? id, int? courseID )
         {
-            var instructor = db.Instructors.Include(i => i.OfficeAssignment);
-            return View(instructor.ToList());
+            //int? id -> for determining whihc instructor was selected -> load related courses
+            //int? courseID - >  determining which course was selected -> load related students
+            // var instructor = db.Instructors.Include(i => i.OfficeAssignment);
+            //return View(instructor.ToList());
+
+            var viewModel = new InstructorIndexData();
+
+            viewModel.Instructors = db.Instructors
+                .Include(i => i.OfficeAssignment)
+                .Include(i => i.Courses)
+                .OrderBy(i => i.LastName);
+
+            //check for id (an instructor has been selected -> get course that instructor teaches)
+
+            if(id!=null)
+            {
+
+                ViewBag.InstructorID = id.Value;  //for UI: which instructor row is selected
+                //Lazy loading
+                viewModel.Courses = viewModel.Instructors
+                                    .Where(i => i.ID == id.Value).Single().Courses;
+            }
+
+            //check for courseID (a course has been selected -> get enrolled students)
+            if(courseID!=null)
+            {
+                ////Lazy Loading
+                //viewModel.Enrollments = viewModel.Courses
+                //                        .Where(x => x.CourseID == courseID.Value)
+                //                        .Single().Enrollment;
+
+                //Explicity Loading
+                var selectedCourse = viewModel.Courses
+                                    .Where(x => x.CourseID == courseID.Value)
+                                    .Single();
+                db.Entry(selectedCourse).Collection(x => x.Enrollments).Load();
+                foreach (Enrollment enrollment in selectedCourse.Enrollments)
+                {
+                    db.Entry(enrollment).Reference(x => x.student).Load();
+                }
+                viewModel.Enrollments = selectedCourse.Enrollments;
+            }
+            //return the view attaching the viewModel (instructors, course, enrollments)
+            return View(viewModel);
         }
 
         // GET: Instructor/Details/5
