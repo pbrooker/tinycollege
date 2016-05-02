@@ -19,6 +19,7 @@ namespace MyTinyCollege.Controllers
         // GET: Instructor
         public ActionResult Index(int? id, int? courseID )
         {
+
             //int? id -> for determining whihc instructor was selected -> load related courses
             //int? courseID - >  determining which course was selected -> load related students
             // var instructor = db.Instructors.Include(i => i.OfficeAssignment);
@@ -91,7 +92,11 @@ namespace MyTinyCollege.Controllers
         // GET: Instructor/Create
         public ActionResult Create()
         {
-            ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location");
+            //ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location");
+            //return View();
+            var instructor = new Instructor();
+            instructor.Courses = new List<Course>();
+            PopulateAssignedCourseData(instructor);
             return View();
         }
 
@@ -100,8 +105,20 @@ namespace MyTinyCollege.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Create([Bind(Include = "ID,LastName,FirstName,Email,HireDate")] Instructor instructor)
+        public ActionResult Create([Bind(Include = "LastName,FirstName,Email,HireDate,OfficeAssignment")] Instructor instructor, string[] selectedCourses)
         {
+            //check for courses checkbox selection
+            if(selectedCourses != null)
+            {
+                instructor.Courses = new List<Course>();
+                foreach (var course in selectedCourses)
+                {
+                    //find the selected  course from UI and add it
+                    var courseToAdd = db.Courses.Find(int.Parse(course));
+                    instructor.Courses.Add(courseToAdd);
+                }
+            }
+
             if (ModelState.IsValid)
             {
                 db.Instructors.Add(instructor);
@@ -109,7 +126,8 @@ namespace MyTinyCollege.Controllers
                 return RedirectToAction("Index");
             }
 
-            ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location", instructor.ID);
+            //this is for our course checkboxes
+            PopulateAssignedCourseData(instructor);
             return View(instructor);
         }
 
@@ -156,7 +174,7 @@ namespace MyTinyCollege.Controllers
                 //and add this object to the viewModel
                 viewModel.Add(new AssignedCourseData
                 {
-                    CourseId = course.CourseID,
+                    CourseID = course.CourseID,
                     Title = course.Title,
                     //set the assigned book if it contains the instructor course id
                     Assigned = instructorCourses.Contains(course.CourseID)
@@ -172,16 +190,76 @@ namespace MyTinyCollege.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Edit([Bind(Include = "ID,LastName,FirstName,Email,HireDate")] Instructor instructor)
+        public ActionResult Edit(int? ID, string[]selectedCourses)
         {
-            if (ModelState.IsValid)
+            if (ID == null)
             {
-                db.Entry(instructor).State = EntityState.Modified;
-                db.SaveChanges();
-                return RedirectToAction("Index");
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
             }
-            ViewBag.ID = new SelectList(db.OfficeAssignments, "InstructorID", "Location", instructor.ID);
-            return View(instructor);
+
+            //find the isntructor to update
+            var instructorToUpdate = db.Instructors
+                .Include(i => i.OfficeAssignment)
+                .Include(o => o.Courses)
+                .Where(i => i.ID == ID)
+                .Single();
+            if(TryUpdateModel(instructorToUpdate, "", new string[] {"Lastname", "Firstname", "HireDate", "OfficeAssignment", "Email" }))
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(instructorToUpdate.OfficeAssignment.Location))
+                    {
+                        instructorToUpdate.OfficeAssignment = null; 
+                    }
+                    UpdateInstructorCourses(selectedCourses, instructorToUpdate);
+                    db.SaveChanges();
+                    return RedirectToAction("Index");
+                }
+                catch (Exception)
+                {
+
+                    ModelState.AddModelError("", "Unable to save changes. Try again later");
+                }
+            }
+
+            //For displaying selected courses checkbox within view
+            PopulateAssignedCourseData(instructorToUpdate);
+            return View(instructorToUpdate);
+        }
+
+        private void UpdateInstructorCourses(string[] selectedCourses, Instructor instructorToUpdate)
+        {
+            if(selectedCourses == null)
+            {
+                instructorToUpdate.Courses = new List<Course>();
+                return;
+            }
+
+            var selectedCoursesHS = new HashSet<string>(selectedCourses);
+            var instructorCourses = new HashSet<int>(instructorToUpdate.Courses.Select(c => c.CourseID));
+
+
+            //loop all courses in database
+            foreach (var course in db.Courses)
+            {
+                //Add a new course to instructor assignment
+                if (selectedCoursesHS.Contains(course.CourseID.ToString()))
+                {
+                    if (!instructorCourses.Contains(course.CourseID))
+                    {
+                        instructorToUpdate.Courses.Add(course);
+                    }
+                }
+
+                else
+                {
+                    //Remove existing course to instructor assignment
+                    if (instructorCourses.Contains(course.CourseID))
+                    {
+                        instructorToUpdate.Courses.Remove(course);
+                    }
+                }
+            }
         }
 
         // GET: Instructor/Delete/5
@@ -203,9 +281,39 @@ namespace MyTinyCollege.Controllers
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public ActionResult DeleteConfirmed(int id)
+            /* pbrooker: Modify Delete Post method to: 
+             * - Delete the office assignment record (if any) when the instructor is deleted
+             * - Remove the instructor if they are assigned as an administrator of a department
+             * Without this code you would get a refereential integrity error if you tried to
+             * delete an instructor who was assigned as a course administrator
+            */
         {
-            Instructor instructor = db.Instructors.Find(id);
+            //Instructor instructor = db.Instructors.Find(id);
+            //converted to Eager Loading including the office assignment entity
+            Instructor instructor = db.Instructors
+                .Include(i => i.OfficeAssignment)
+                .Where(i => i.ID == id)
+                .Single();
+
+            //remove office assignment record for this instructor
+            instructor.OfficeAssignment = null;
+                        
+            //remove the instructor
             db.Instructors.Remove(instructor);
+
+
+            //check for department assignment
+            var department = db.Departments
+                .Where(d => d.InstructorID == id)
+                .SingleOrDefault();
+            //use single or default here because of possible null
+            if(department != null)
+            {
+                //remove the intructor id value for this department
+                department.InstructorID = null;
+            }
+
+            //save changes and redirect back to instructor list
             db.SaveChanges();
             return RedirectToAction("Index");
         }
