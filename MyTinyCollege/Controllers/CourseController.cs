@@ -11,6 +11,9 @@ using MyTinyCollege.Models;
 
 namespace MyTinyCollege.Controllers
 {
+    //pbrooker: Adding authorization for admin users only
+    // [Authorize] anyone who logs in
+    [Authorize(Roles ="admin")]
     public class CourseController : Controller
     {
         private SchoolContext db = new SchoolContext();
@@ -148,6 +151,27 @@ namespace MyTinyCollege.Controllers
             db.Courses.Remove(course);
             db.SaveChanges();
             return RedirectToAction("Index");
+        }
+
+        public ActionResult UpdateCourseCredits()
+        {
+            
+            return View();
+        }
+        [HttpPost]
+        public ActionResult UpdateCourseCredits(int? multiplier)
+        {
+            if(multiplier != null)
+            {
+                /* Raw SQL query
+                 * Use the Database.SqlQuery method for queries that return types that are not entities.
+                 * The returned dat isn't tracked by the database context object.
+                 */
+                ViewBag.RowsAffected = db.Database.ExecuteSqlCommand("UPDATE Course SET credits = credits *{0}", multiplier);
+
+                //assingment query will be like var test = db.Database.SqlQuery<MyTinyCollege.Models.Course>("Select to 3 ........");
+            }
+            return View();
         }
 
         protected override void Dispose(bool disposing)
