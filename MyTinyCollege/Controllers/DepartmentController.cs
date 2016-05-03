@@ -9,6 +9,7 @@ using System.Web;
 using System.Web.Mvc;
 using MyTinyCollege.DAL;
 using MyTinyCollege.Models;
+using MyTinyCollege.Helpers;
 
 namespace MyTinyCollege.Controllers
 {
@@ -60,9 +61,44 @@ namespace MyTinyCollege.Controllers
                 //Note the HttpPostedFileBase args in the method
                 //Also the from needs a enctype="multipart/form-data"
                 //and <input type="file" id="ImageName" name="ImageName" accept="image/*" class = "form-control"/>
-                db.Departments.Add(department);
-                await db.SaveChangesAsync();
-                return RedirectToAction("Index");
+
+                if(ImageName !=null && ImageName.ContentLength >0)
+                {
+                    //do we have anything to upload - yes
+                    var validImageTypes = new string[]
+                    {
+                        //"image/gif",
+                        //"image/jpg",
+                        //"iamge/jpeg",
+                        "image/png"
+                    };
+                    if(!validImageTypes.Contains(ImageName.ContentType))
+                    {
+                        //file being uploaded is not a png - display error
+                        ModelState.AddModelError("", "Please chose a PNG image.");
+                        return View(department);
+                    }
+                    //save new department to database
+                    db.Departments.Add(department);
+                    await db.SaveChangesAsync();
+                    //Retreive the IDENTITY from SQL Server
+                    string pictureName = department.DepartmentID.ToString();
+
+                    //rename, scale and upload image
+                    ImageUpload imageUpload = new ImageUpload { Width = 128 };
+                    ImageResult imageResult = imageUpload.RenameUploadFile(ImageName, pictureName);
+
+                    return RedirectToAction("Index");
+                }
+                else
+                {
+                    //nothing to upload - display error
+                    ModelState.AddModelError("", "YOu have not selected an image file to upload.");
+                    return View(department);
+                }
+
+
+                
             }
 
             
