@@ -53,7 +53,7 @@ namespace MyTinyCollege.Controllers
 
 
         }
-
+        [AllowAnonymous]
         // GET: Course/Details/5
         public ActionResult Details(int? id)
         {

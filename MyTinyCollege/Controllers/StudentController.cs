@@ -12,6 +12,7 @@ using PagedList;
 
 namespace MyTinyCollege.Controllers
 {
+    [Authorize(Roles = "admin")]
     public class StudentController : Controller
     {
         private SchoolContext db = new SchoolContext();
