@@ -9,6 +9,7 @@ using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 using Microsoft.Owin.Security;
 using MyTinyCollege.Models;
+using MyTinyCollege.DAL;
 
 namespace MyTinyCollege.Controllers
 {
@@ -151,10 +152,44 @@ namespace MyTinyCollege.Controllers
         {
             if (ModelState.IsValid)
             {
+                
+                //pbrooker: test for existing person(instructor or student) before register
+                SchoolContext db = new SchoolContext();
+
+                Person instructorOrStudent = db.People.Where(p => p.Email == model.Email).SingleOrDefault();
+
+                if(instructorOrStudent == null)
+                {
+                    //Not already in system as person object- show message and return view
+                    ModelState.AddModelError("", "Must be a student or professor at TinyCollege");
+                    return View(model);
+                }
+
+                //end prbooker: test for existing person
+
+
                 var user = new ApplicationUser { UserName = model.Email, Email = model.Email };
                 var result = await UserManager.CreateAsync(user, model.Password);
+
+ 
+                    
                 if (result.Succeeded)
-                {
+                {   
+                    //pbrooker: is this a student or instructor -> give appropriate role
+                    var isStudent = db.People.Find(instructorOrStudent.ID);
+                    if(isStudent is Student)
+                    {
+                        //we have a student - assign student role
+                        UserManager.AddToRole(user.Id, "student");
+
+                    }
+                    else
+                    {
+                        //we have an instructor
+                        UserManager.AddToRole(user.Id, "instructor");
+                    }
+                    //end pbrooker: - assign appropriate role                
+
                     await SignInManager.SignInAsync(user, isPersistent:false, rememberBrowser:false);
                     
                     // For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=320771
